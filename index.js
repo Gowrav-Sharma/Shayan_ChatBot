@@ -153,16 +153,11 @@ const EVENTS_MENU = [
 ];
 
 async function sendEventsNumberedMenu(to) {
-  const menu = EVENTS_MENU.map((e, i) => `${i + 1}. ${e}`).join("
-");
+  const menu = EVENTS_MENU.map((e, i) => (i + 1) + '. ' + e).join('\n');
   const body =
-    "Which events would you like us to cover?
-
-" +
+    'Which events would you like us to cover?\n\n' +
     menu +
-    "
-
-Simply reply with the numbers — e.g. *1, 3, 5*";
+    '\n\n👉 *Reply with the numbers of the events you want* — for example, type *2, 4, 5* to select Mehendi, Wedding ceremony and Reception.\n\nYou can select as many as you like.';
   await sendText(to, body);
 }
 
