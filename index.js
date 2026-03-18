@@ -19,186 +19,374 @@ One Horizon Productions is a premium photography brand dedicated to preserving t
 YOUR ROLE:
 You are the first point of contact for couples who have expressed interest in One Horizon. Your job is to make them feel genuinely welcomed, introduce our work, and understand their needs so our team can craft a personalised proposal for them.
 
-PORTFOLIO LINK: https://onehorizonproductions.com (replace with real link)
+PORTFOLIO LINK: https://onehorizonproductions.com
 
 CONVERSATION FLOW:
-1. Greet them warmly and personally using their first name. Acknowledge and celebrate this chapter of their life. Share the portfolio link naturally — not as a transaction, but as an invitation to see our world. Ask if they have had a chance to explore our work.
-2. Once they respond, gently ask for their wedding date.
+1. Greet them warmly and personally using their first name. Share the portfolio link. Ask if they have had a chance to explore our work.
+2. Once they respond, ask for their wedding date.
 3. Ask for their venue name and city.
-4. Ask how many events they would like covered (e.g. engagement shoot, mehendi, haldi, wedding ceremony, reception).
-5. Ask for a rough budget range they have in mind for photography and videography.
-6. Once all four details are collected, close warmly — let them know our team will thoughtfully put together a personalised package and be in touch within a few hours. Make them feel looked after.
+4. The events question will be handled with a tap-to-select list — acknowledge their selection naturally and move on.
+5. The budget question will be handled with tap-to-select buttons — acknowledge their selection naturally and move on.
+6. Once all four details are collected, close warmly — let them know our team will put together a personalised package and be in touch within a few hours.
 
 TONE AND STYLE:
 - Speak the way a trusted, well-mannered professional would — warm but never overfamiliar, elegant but never stiff.
 - Never use casual slang, abbreviations, or overly informal language (no "Hey!", "Cool!", "Awesome!", "np", "tbh" etc.).
-- Keep messages concise — 2 to 4 sentences. This is WhatsApp, not email.
+- Keep every message to 1 to 2 sentences maximum. Be crisp. Say exactly what needs to be said and nothing more.
+- Never over-explain or add filler phrases before getting to the point.
 - Ask ONE question at a time. Never combine multiple questions in one message.
-- Be genuinely celebratory about their wedding — this is one of the most significant moments of their lives.
+- Do not repeat information already shared earlier in the conversation.
 
 PRICING:
-- If asked about pricing before details are collected, acknowledge their question graciously and let them know that your packages are tailored to each couple's specific requirements. You would love to understand their vision before presenting options.
-- If they ask for a general starting point, you may share that coverage for a single event starts from Rs. 80,000, and that the final package depends on the number of events, hours of coverage, and any additional services they require.
-- Never quote a specific final price. That is for the sales team to do.
+- If asked about pricing before details are collected, let them know packages are tailored to each couple's requirements and you would love to understand their vision first.
+- If they ask for a starting point, share that coverage for a single event starts from Rs. 80,000, and the final package depends on their specific needs.
+- Never quote a specific final price.
 
 STRICT RULES — NEVER VIOLATE:
-- Never confirm whether a date is available. Always say "Let me have our team check availability for that date and confirm with you."
+- Never confirm whether a date is available. Say "Let me have our team check availability for that date."
 - Never mention any competitor studio by name.
-- Never use casual slang or informal language under any circumstances.
-- Never make promises about deliverables, timelines, or inclusions that are not verified by the team.
-- If asked something outside your knowledge, say: "That's a great question — let me have someone from our team get back to you on that shortly."
-- Once all 4 details are collected, add the text "%%QUOTE_READY%%" at the very end of your message (this is a hidden system signal — do not explain it to the client).
+- Never use casual slang or informal language.
+- Never make promises about deliverables, timelines, or inclusions.
+- If asked something outside your knowledge: "Let me have someone from our team get back to you on that shortly."
+- Once all 4 details are collected, add "%%QUOTE_READY%%" at the very end of your message.
 
 DETAILS TO COLLECT:
 1. Wedding date
 2. Venue name + city
-3. Number and type of events
-4. Budget range`;
+3. Events (client replies with numbers from a numbered menu — their selection will be provided to you)
+4. Budget range (handled via interactive buttons — will be provided as the client's selection)`;
 
-// ─── HELPERS ──────────────────────────────────────────────────────────────────
-function getHistory(phone) {
-  if (!conversations[phone]) conversations[phone] = [];
+// ─── SESSION MANAGEMENT ───────────────────────────────────────────────────────
+function getSession(phone) {
+  if (!conversations[phone]) {
+    conversations[phone] = {
+      messages: [],
+      stage: "greeting",
+      details: { date: null, venue: null, events: null, budget: null },
+    };
+  }
   return conversations[phone];
 }
 
 function saveMessage(phone, role, content) {
-  if (!conversations[phone]) conversations[phone] = [];
-  conversations[phone].push({ role, content });
-  // Keep last 40 messages to stay within token limits
-  if (conversations[phone].length > 40) {
-    conversations[phone] = conversations[phone].slice(-40);
+  const session = getSession(phone);
+  session.messages.push({ role, content });
+  if (session.messages.length > 40) {
+    session.messages = session.messages.slice(-40);
   }
 }
 
-async function sendWhatsApp(to, message) {
-  const cleanMessage = message.replace("%%QUOTE_READY%%", "").trim();
+// ─── WHATSAPP SENDERS ─────────────────────────────────────────────────────────
+const WA_URL = () =>
+  `https://graph.facebook.com/v19.0/${process.env.WHATSAPP_PHONE_ID}/messages`;
+
+const WA_HEADERS = () => ({
+  Authorization: `Bearer ${process.env.WHATSAPP_TOKEN}`,
+  "Content-Type": "application/json",
+});
+
+async function sendText(to, body) {
+  const clean = body.replace("%%QUOTE_READY%%", "").trim();
   await axios.post(
-    `https://graph.facebook.com/v19.0/${process.env.WHATSAPP_PHONE_ID}/messages`,
-    {
-      messaging_product: "whatsapp",
-      to,
-      type: "text",
-      text: { body: cleanMessage },
-    },
-    {
-      headers: {
-        Authorization: `Bearer ${process.env.WHATSAPP_TOKEN}`,
-        "Content-Type": "application/json",
-      },
-    }
+    WA_URL(),
+    { messaging_product: "whatsapp", to, type: "text", text: { body: clean } },
+    { headers: WA_HEADERS() }
   );
 }
 
-async function notifySalesTeam(phone, history) {
-  // Build a clean quote brief from conversation history
-  const transcript = history
-    .map((m) => `${m.role === "user" ? "Client" : "Priya"}: ${m.content}`)
-    .join("\n");
+async function sendButtons(to, bodyText, buttons) {
+  await axios.post(
+    WA_URL(),
+    {
+      messaging_product: "whatsapp",
+      to,
+      type: "interactive",
+      interactive: {
+        type: "button",
+        body: { text: bodyText },
+        action: {
+          buttons: buttons.map((b, i) => ({
+            type: "reply",
+            reply: { id: `btn_${i}`, title: b },
+          })),
+        },
+      },
+    },
+    { headers: WA_HEADERS() }
+  );
+}
 
-  const brief = `🎉 *New Quote Request — One Horizon Productions*\n\n*Client number:* ${phone}\n\n*Conversation summary:*\n${transcript}\n\n_Please prepare a personalised package for this client._`;
+async function sendList(to, bodyText, buttonLabel, items) {
+  await axios.post(
+    WA_URL(),
+    {
+      messaging_product: "whatsapp",
+      to,
+      type: "interactive",
+      interactive: {
+        type: "list",
+        body: { text: bodyText },
+        action: {
+          button: buttonLabel,
+          sections: [
+            {
+              title: "Events",
+              rows: items.map((item, i) => ({ id: `evt_${i}`, title: item })),
+            },
+          ],
+        },
+      },
+    },
+    { headers: WA_HEADERS() }
+  );
+}
 
-  // Send to your sales team WhatsApp number
+const EVENTS_MENU = [
+  "Engagement shoot",
+  "Mehendi",
+  "Haldi",
+  "Wedding ceremony",
+  "Reception",
+  "Pre-wedding shoot",
+  "Post-wedding shoot",
+  "Other",
+];
+
+async function sendEventsNumberedMenu(to) {
+  const menu = EVENTS_MENU.map((e, i) => `${i + 1}. ${e}`).join("
+");
+  const body =
+    "Which events would you like us to cover?
+
+" +
+    menu +
+    "
+
+Simply reply with the numbers — e.g. *1, 3, 5*";
+  await sendText(to, body);
+}
+
+function parseEventSelection(text) {
+  const nums = text.match(/\d+/g);
+  if (!nums) return null;
+  const selected = nums
+    .map(n => EVENTS_MENU[parseInt(n) - 1])
+    .filter(Boolean);
+  return selected.length > 0 ? selected.join(", ") : null;
+}
+
+function hasOtherSelected(text) {
+  const nums = text.match(/\d+/g);
+  if (!nums) return false;
+  return nums.some(n => parseInt(n) === EVENTS_MENU.length); // last item is Other
+}
+
+async function sendBudgetButtons(to) {
+  await sendButtons(
+    to,
+    "What is your approximate budget for photography and videography?",
+    ["Rs. 2L - 4L", "Rs. 4L - 6L", "Above Rs. 6L"]
+  );
+}
+
+// ─── NOTIFY SALES TEAM ────────────────────────────────────────────────────────
+async function notifySalesTeam(phone, session) {
+  const { details } = session;
+  const brief =
+    `*New Quote Request — One Horizon Productions*\n\n` +
+    `*Client:* ${phone}\n` +
+    `*Wedding date:* ${details.date || "Not provided"}\n` +
+    `*Venue & city:* ${details.venue || "Not provided"}\n` +
+    `*Events:* ${details.events || "Not provided"}\n` +
+    `*Budget:* ${details.budget || "Not provided"}\n\n` +
+    `Please prepare a personalised package for this client.`;
+
   if (process.env.SALES_TEAM_NUMBER) {
-    await sendWhatsApp(process.env.SALES_TEAM_NUMBER, brief);
+    await sendText(process.env.SALES_TEAM_NUMBER, brief);
   }
-
   console.log(`Quote brief sent to sales team for ${phone}`);
 }
 
+// ─── CLAUDE REPLY ─────────────────────────────────────────────────────────────
 async function getChatReply(phone, userMessage, clientName = "") {
   saveMessage(phone, "user", userMessage);
-  const history = getHistory(phone);
+  const session = getSession(phone);
 
-  const systemWithName = clientName
+  const system = clientName
     ? `${SYSTEM_PROMPT}\n\nThe client's name is ${clientName}.`
     : SYSTEM_PROMPT;
 
   const response = await anthropic.messages.create({
     model: "claude-haiku-4-5-20251001",
-    max_tokens: 400,
-    system: systemWithName,
-    messages: history,
+    max_tokens: 300,
+    system,
+    messages: session.messages,
   });
 
   const reply = response.content[0].text;
   saveMessage(phone, "assistant", reply);
 
-  // Check if all quote details have been collected
   if (reply.includes("%%QUOTE_READY%%")) {
-    await notifySalesTeam(phone, history);
+    await notifySalesTeam(phone, session);
   }
 
   return reply;
 }
 
+// ─── STAGE HANDLER ────────────────────────────────────────────────────────────
+async function handleIncoming(phone, userText, clientName, interactiveReply) {
+  const session = getSession(phone);
+
+  // Client typed event numbers (e.g. "1, 3, 5")
+  if (session.stage === "events" && userText) {
+    const selected = parseEventSelection(userText);
+    if (selected) {
+      // If they included Other, ask them to describe it
+      if (hasOtherSelected(userText)) {
+        session.details.events = selected;
+        session.stage = "events_other";
+        saveMessage(phone, "user", `Events selected: ${selected}`);
+        await sendText(phone, "Please briefly describe the other event(s) you have in mind.");
+        return;
+      }
+      session.details.events = selected;
+      session.stage = "budget";
+      saveMessage(phone, "user", `Events selected: ${selected}`);
+      await sendText(phone, `Lovely — ${selected}. One last question:`);
+      await sendBudgetButtons(phone);
+      return;
+    }
+    // Could not parse — prompt again
+    await sendText(phone, "Please reply with the numbers of the events you'd like — e.g. *2, 4, 5*");
+    await sendEventsNumberedMenu(phone);
+    return;
+  }
+
+  // Client described their Other event
+  if (session.stage === "events_other" && userText) {
+    session.details.events = session.details.events.replace("Other", userText);
+    session.stage = "budget";
+    saveMessage(phone, "user", `Other event described: ${userText}`);
+    await sendText(phone, "Noted — we will keep that in mind. One last question:");
+    await sendBudgetButtons(phone);
+    return;
+  }
+
+  // Client tapped a button (budget)
+  if (interactiveReply?.type === "button_reply") {
+    const selected = interactiveReply.button_reply.title;
+    session.details.budget = selected;
+    session.stage = "done";
+
+    const closingPrompt =
+      `The client has selected a budget of ${selected}. ` +
+      `You now have all four details — date: ${session.details.date}, ` +
+      `venue: ${session.details.venue}, events: ${session.details.events}, ` +
+      `budget: ${selected}. Close the conversation warmly. Tell them the team ` +
+      `will prepare a personalised package and be in touch within a few hours. ` +
+      `End your message with %%QUOTE_READY%%.`;
+
+    const reply = await getChatReply(phone, closingPrompt, clientName);
+    await sendText(phone, reply);
+    return;
+  }
+
+  // Regular text messages
+  switch (session.stage) {
+    case "greeting": {
+      const reply = await getChatReply(phone, userText, clientName);
+      await sendText(phone, reply);
+      session.stage = "date";
+      break;
+    }
+
+    case "date": {
+      session.details.date = userText;
+      const reply = await getChatReply(phone, userText, clientName);
+      await sendText(phone, reply);
+      session.stage = "venue";
+      break;
+    }
+
+    case "venue": {
+      session.details.venue = userText;
+      const reply = await getChatReply(phone, userText, clientName);
+      await sendText(phone, reply);
+      session.stage = "events";
+      await sendEventsNumberedMenu(phone);
+      break;
+    }
+
+    default: {
+      // Client typed instead of tapping during events/budget stage
+      const reply = await getChatReply(phone, userText, clientName);
+      await sendText(phone, reply);
+      break;
+    }
+  }
+}
+
 // ─── ROUTES ───────────────────────────────────────────────────────────────────
-
-// Meta webhook verification
 app.get("/webhook", (req, res) => {
-  const mode = req.query["hub.mode"];
-  const token = req.query["hub.verify_token"];
-  const challenge = req.query["hub.challenge"];
-
+  const { "hub.mode": mode, "hub.verify_token": token, "hub.challenge": challenge } = req.query;
   if (mode === "subscribe" && token === process.env.WEBHOOK_VERIFY_TOKEN) {
-    console.log("Webhook verified by Meta");
+    console.log("Webhook verified");
     res.status(200).send(challenge);
   } else {
     res.sendStatus(403);
   }
 });
 
-// Incoming WhatsApp messages
 app.post("/webhook", async (req, res) => {
   try {
-    const entry = req.body.entry?.[0];
-    const change = entry?.changes?.[0];
-    const message = change?.value?.messages?.[0];
-    const contact = change?.value?.contacts?.[0];
+    const message = req.body.entry?.[0]?.changes?.[0]?.value?.messages?.[0];
+    const contact = req.body.entry?.[0]?.changes?.[0]?.value?.contacts?.[0];
 
-    if (!message || message.type !== "text") return res.sendStatus(200);
+    if (!message) return res.sendStatus(200);
 
     const phone = message.from;
-    const userText = message.text.body;
     const clientName = contact?.profile?.name || "";
 
-    console.log(`Message from ${phone} (${clientName}): ${userText}`);
-
-    const reply = await getChatReply(phone, userText, clientName);
-    await sendWhatsApp(phone, reply);
+    if (message.type === "interactive") {
+      console.log(`Interactive from ${phone}:`, message.interactive?.type);
+      await handleIncoming(phone, null, clientName, message.interactive);
+    } else if (message.type === "text") {
+      console.log(`Text from ${phone} (${clientName}): ${message.text.body}`);
+      await handleIncoming(phone, message.text.body, clientName, null);
+    }
 
     res.sendStatus(200);
   } catch (err) {
-    console.error("Error handling message:", err?.response?.data || err.message);
-    res.sendStatus(200); // Always return 200 to Meta
+    console.error("Error:", err?.response?.data || err.message);
+    res.sendStatus(200);
   }
 });
 
-// New lead trigger from Zapier — fires the first message
 app.post("/new-lead", async (req, res) => {
   try {
     const { phone, name } = req.body;
     if (!phone) return res.status(400).json({ error: "phone required" });
 
-    // Format phone: remove spaces, ensure country code
     const cleanPhone = phone.replace(/\D/g, "");
-
     console.log(`New lead: ${name} (${cleanPhone})`);
+
+    const session = getSession(cleanPhone);
+    session.stage = "greeting";
 
     const firstMessage = await getChatReply(
       cleanPhone,
-      `Hi, I'm interested in wedding photography. My name is ${name || "there"}.`,
+      `Hi, I am interested in wedding photography. My name is ${name || "there"}.`,
       name || ""
     );
 
-    await sendWhatsApp(cleanPhone, firstMessage);
+    await sendText(cleanPhone, firstMessage);
     res.json({ success: true, phone: cleanPhone });
   } catch (err) {
-    console.error("Error sending first message:", err?.response?.data || err.message);
+    console.error("Error:", err?.response?.data || err.message);
     res.status(500).json({ error: err.message });
   }
 });
 
-// Health check
 app.get("/", (req, res) => res.json({ status: "One Horizon Bot is running" }));
 
 const PORT = process.env.PORT || 3000;
