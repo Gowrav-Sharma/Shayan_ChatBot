@@ -346,8 +346,18 @@ app.post("/webhook", async (req, res) => {
       console.log(`Interactive from ${phone}:`, message.interactive?.type);
       await handleIncoming(phone, null, clientName, message.interactive);
     } else if (message.type === "text") {
-      console.log(`Text from ${phone} (${clientName}): ${message.text.body}`);
-      await handleIncoming(phone, message.text.body, clientName, null);
+      const userText = message.text.body;
+      console.log(`Text from ${phone} (${clientName}): ${userText}`);
+
+      // Reset command — clears conversation for this number only
+      if (userText.trim().toLowerCase() === 'reset') {
+        delete conversations[phone];
+        await sendText(phone, 'Conversation reset. Send any message to start again.');
+        console.log(`Conversation reset for ${phone}`);
+        return res.sendStatus(200);
+      }
+
+      await handleIncoming(phone, userText, clientName, null);
     }
 
     res.sendStatus(200);
