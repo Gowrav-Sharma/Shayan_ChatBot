@@ -120,31 +120,6 @@ async function sendButtons(to, bodyText, buttons) {
   );
 }
 
-async function sendList(to, bodyText, buttonLabel, items) {
-  await axios.post(
-    WA_URL(),
-    {
-      messaging_product: "whatsapp",
-      to,
-      type: "interactive",
-      interactive: {
-        type: "list",
-        body: { text: bodyText },
-        action: {
-          button: buttonLabel,
-          sections: [
-            {
-              title: "Events",
-              rows: items.map((item, i) => ({ id: `evt_${i}`, title: item })),
-            },
-          ],
-        },
-      },
-    },
-    { headers: WA_HEADERS() }
-  );
-}
-
 const EVENTS_MENU = [
   "Engagement shoot",
   "Mehendi",
