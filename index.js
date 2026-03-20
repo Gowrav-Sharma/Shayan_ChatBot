@@ -289,7 +289,12 @@ async function handleIncoming(phone, userText, clientName, interactiveReply) {
   // Regular text messages
   switch (session.stage) {
     case "greeting": {
-      const reply = await getChatReply(phone, userText, clientName);
+      // Client has replied to the opening template — Priya acknowledges and asks for date
+      const name = clientName || session.clientName || "";
+      const prompt = name
+        ? `The client ${name} has just replied to our opening message saying: "${userText}". Acknowledge warmly using their name and ask for their wedding date.`
+        : `The client has just replied to our opening message saying: "${userText}". Acknowledge warmly and ask for their wedding date.`;
+      const reply = await getChatReply(phone, prompt, name);
       await sendText(phone, reply);
       session.stage = "date";
       break;
@@ -375,16 +380,27 @@ app.post("/new-lead", async (req, res) => {
     const cleanPhone = phone.replace(/\D/g, "");
     console.log(`New lead: ${name} (${cleanPhone})`);
 
+    // Initialise session — stage is 'greeting' until client replies
     const session = getSession(cleanPhone);
     session.stage = "greeting";
+    session.clientName = name || "";
 
-    const firstMessage = await getChatReply(
-      cleanPhone,
-      `Hi, I am interested in wedding photography. My name is ${name || "there"}.`,
-      name || ""
+    // Send approved Meta template as the opening message
+    await axios.post(
+      `https://graph.facebook.com/v19.0/${process.env.WHATSAPP_PHONE_ID}/messages`,
+      {
+        messaging_product: "whatsapp",
+        to: cleanPhone,
+        type: "template",
+        template: {
+          name: "one_horizon_opening",
+          language: { code: "en" },
+        },
+      },
+      { headers: WA_HEADERS() }
     );
 
-    await sendText(cleanPhone, firstMessage);
+    console.log(`Template sent to ${cleanPhone}`);
     res.json({ success: true, phone: cleanPhone });
   } catch (err) {
     console.error("Error:", err?.response?.data || err.message);
