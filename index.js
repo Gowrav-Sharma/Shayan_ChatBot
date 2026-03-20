@@ -305,10 +305,22 @@ async function handleIncoming(phone, userText, clientName, interactiveReply) {
     }
 
     case "date": {
-      session.details.date = userText;
-      const reply = await getChatReply(phone, userText, clientName);
-      await sendText(phone, reply);
-      session.stage = "venue";
+      // Check if this reply looks like a year clarification (just a year number)
+      const isYearOnly = /^20\d{2}$/.test(userText.trim());
+      if (isYearOnly && session.details.date) {
+        // Append year to the previously stored date
+        session.details.date = session.details.date + ' ' + userText.trim();
+        const reply = await getChatReply(phone, `The client confirmed the year as ${userText.trim()}. The full wedding date is ${session.details.date}. Now ask for their venue name and city.`, clientName);
+        await sendText(phone, reply);
+        session.stage = "venue";
+      } else {
+        session.details.date = userText;
+        const reply = await getChatReply(phone, userText, clientName);
+        await sendText(phone, reply);
+        // Only move to venue if Claude did not ask a follow-up about the year
+        const askedYearFollowUp = /2026|2027/i.test(reply) && /or/i.test(reply);
+        if (!askedYearFollowUp) session.stage = "venue";
+      }
       break;
     }
 
