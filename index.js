@@ -310,9 +310,9 @@ async function handleIncoming(phone, userText, clientName, interactiveReply) {
 
     case "venue": {
       session.details.venue = userText;
-      const reply = await getChatReply(phone, userText, clientName);
-      await sendText(phone, reply);
       session.stage = "events";
+      // Acknowledge venue with a fixed line — no Claude call to avoid duplicate event lists
+      await sendText(phone, `Perfect — ${userText} is a lovely choice.`);
       await sendEventsNumberedMenu(phone);
       break;
     }
